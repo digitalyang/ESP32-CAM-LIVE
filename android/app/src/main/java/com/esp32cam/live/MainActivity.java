@@ -178,6 +178,14 @@ public final class MainActivity extends Activity {
             public void onUnavailable() {
                 runOnUiThread(() -> setDisconnected(R.string.status_disconnected));
             }
+
+            @Override
+            public void onError(String message) {
+                runOnUiThread(() -> {
+                    setDisconnected(R.string.status_connection_failed);
+                    showToast("连接失败：" + message);
+                });
+            }
         });
     }
 

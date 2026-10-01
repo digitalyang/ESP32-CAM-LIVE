@@ -8,6 +8,7 @@
     <string name="status_connected">已连接，正在加载视频…</string>
     <string name="status_streaming">已连接，视频播放中</string>
     <string name="status_disconnected">连接已断开</string>
+    <string name="status_connection_failed">连接失败，请检查附近设备权限</string>
     <string name="auto_exposure">自动曝光</string>
     <string name="exposure">曝光</string>
     <string name="resolution">分辨率</string>

@@ -5,6 +5,7 @@
 ## 功能
 
 - 通过 Android `WifiNetworkSpecifier` 请求连接 `ESP32-CAM`
+- 兼容 Android 16 / HyperOS 的网络变更权限检查，系统拒绝请求时不会闪退
 - 播放 ESP32-CAM 的 HTTP MJPEG 实时视频
 - 显示客户端实际解码 FPS 和 JPEG 码率
 - 网络接收与 JPEG 解码分离，只保留最新待解码帧；流中断后自动重连

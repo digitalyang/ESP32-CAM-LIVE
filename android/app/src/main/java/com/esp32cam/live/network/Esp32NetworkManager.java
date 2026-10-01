@@ -12,6 +12,7 @@ public final class Esp32NetworkManager {
         void onConnected(Network network);
         void onDisconnected();
         void onUnavailable();
+        void onError(String message);
     }
 
     private static final String SSID = "ESP32-CAM";
@@ -51,7 +52,13 @@ public final class Esp32NetworkManager {
                 listener.onUnavailable();
             }
         };
-        connectivityManager.requestNetwork(request, callback);
+        try {
+            connectivityManager.requestNetwork(request, callback);
+        } catch (RuntimeException error) {
+            callback = null;
+            listener.onError(error.getMessage() == null
+                    ? error.getClass().getSimpleName() : error.getMessage());
+        }
     }
 
     public void disconnect() {
@@ -60,7 +67,7 @@ public final class Esp32NetworkManager {
         }
         try {
             connectivityManager.unregisterNetworkCallback(callback);
-        } catch (IllegalArgumentException ignored) {
+        } catch (RuntimeException ignored) {
             // The callback may already have been released by Android.
         }
         callback = null;
