@@ -24,6 +24,8 @@
 - 分辨率三档：320×240 / 400×296 / 640×480
 - 默认关闭自动曝光并使用适合 30 FPS 的短曝光；中 / 长档可能降低实际帧率
 - 切换画质或分辨率时自动重连视频流，避免旧帧积压
+- 原生 Android 客户端，可通过系统弹窗连接 ESP32-CAM SoftAP
+- Android 客户端支持实时画面、曝光、分辨率、画质和视频帧拍照
 
 ## 工程结构
 
@@ -43,6 +45,7 @@ esp32-cam-live/
 │       ├── private_include/组件内部配置、引脚和协议头文件
 │       ├── src/            摄像头、采集、网络、RTSP 和 Web 实现
 │       └── CMakeLists.txt
+├── android/               原生 Android 客户端（Android 10 及以上）
 └── third_party/
     └── README.md           第三方依赖来源和管理策略
 ```
@@ -74,6 +77,26 @@ idf.py -p COM8 flash monitor
 5. 浏览器打开 `http://192.168.4.1/` 调整曝光、画质和分辨率。
 
 高分辨率、高清画质和长曝光都会降低实际 FPS；30 FPS 是发送上限，不是硬件保证值。
+
+## Android 客户端
+
+Android 10 及以上设备可以使用仓库中的原生客户端。应用通过 Android 系统的
+Wi-Fi 确认窗口连接 `ESP32-CAM`，不会修改手机的全局默认网络，也不会保存密码。
+
+```powershell
+cd android
+.\gradlew.bat assembleDebug
+```
+
+生成的安装包位于：
+
+```text
+android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+应用播放 `http://192.168.4.1:81/stream`，控制请求发送到
+`http://192.168.4.1/control`。拍照直接保存当前视频帧到系统相册的
+`Pictures/ESP32-CAM`，因此不会额外占用 ESP32 摄像头帧缓冲。
 
 ## 开源协议
 

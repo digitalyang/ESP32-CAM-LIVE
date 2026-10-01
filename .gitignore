@@ -19,3 +19,10 @@ __pycache__/
 *.log
 *.pcap
 *.pcapng
+
+# Android generated output and machine-local SDK path
+/android/.gradle/
+/android/local.properties
+/android/app/build/
+/android/build/
+*.apk

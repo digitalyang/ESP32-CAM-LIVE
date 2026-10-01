@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">ESP32-CAM Live</string>
+    <string name="connect">连接 ESP32-CAM</string>
+    <string name="disconnect">断开连接</string>
+    <string name="capture">拍照</string>
+    <string name="status_idle">尚未连接</string>
+    <string name="status_requesting">请在系统窗口确认连接 ESP32-CAM</string>
+    <string name="status_connected">已连接，正在加载视频…</string>
+    <string name="status_disconnected">连接已断开</string>
+    <string name="auto_exposure">自动曝光</string>
+    <string name="exposure">曝光</string>
+    <string name="resolution">分辨率</string>
+    <string name="quality">画质</string>
+    <string name="fps_placeholder">FPS 0.0 · 0 kb/s</string>
+</resources>
