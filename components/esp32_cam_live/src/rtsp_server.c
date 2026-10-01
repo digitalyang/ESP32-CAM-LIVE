@@ -324,8 +324,7 @@ static bool send_rtp_jpeg(int rtp_fd, const rtsp_session_t *session,
             /* Large, high-motion JPEGs contain many more RTP fragments than
              * static frames. Drain the Wi-Fi queue in small batches so a
              * single frame cannot create a packet burst that drops later
-             * fragments. At the 1 kHz RTOS tick this costs only 1 ms per
-             * four packets and leaves the 33 ms frame budget intact. */
+             * fragments. */
             vTaskDelay(1);
         }
     }
@@ -346,7 +345,7 @@ static int create_tcp_listener(void)
         .sin_addr.s_addr = htonl(INADDR_ANY),
     };
     if (bind(socket_fd, (struct sockaddr *)&address, sizeof(address)) < 0 ||
-        listen(socket_fd, 1) < 0) {
+        listen(socket_fd, 2) < 0) {
         close(socket_fd);
         return -1;
     }
@@ -418,6 +417,20 @@ static void rtsp_task(void *argument)
                 int no_delay = 1;
                 setsockopt(client, IPPROTO_TCP, TCP_NODELAY,
                            &no_delay, sizeof(no_delay));
+                int keep_alive = 1;
+                setsockopt(client, SOL_SOCKET, SO_KEEPALIVE,
+                           &keep_alive, sizeof(keep_alive));
+#ifdef TCP_KEEPIDLE
+                int keep_idle = 5;
+                int keep_interval = 2;
+                int keep_count = 3;
+                setsockopt(client, IPPROTO_TCP, TCP_KEEPIDLE,
+                           &keep_idle, sizeof(keep_idle));
+                setsockopt(client, IPPROTO_TCP, TCP_KEEPINTVL,
+                           &keep_interval, sizeof(keep_interval));
+                setsockopt(client, IPPROTO_TCP, TCP_KEEPCNT,
+                           &keep_count, sizeof(keep_count));
+#endif
                 ESP_LOGI(TAG, "RTSP client connected: %s",
                          inet_ntoa(session.peer.sin_addr));
             } else {

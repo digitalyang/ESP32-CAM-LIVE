@@ -6,13 +6,13 @@
 
 - 通过 Android `WifiNetworkSpecifier` 请求连接 `ESP32-CAM`
 - 兼容 Android 16 / HyperOS 的网络变更权限检查，系统拒绝请求时不会闪退
-- 播放 ESP32-CAM 的 HTTP MJPEG 实时视频
-- 显示客户端实际解码 FPS 和 JPEG 码率
-- 网络接收与 JPEG 解码分离，只保留最新待解码帧；流中断后自动重连
+- 内嵌官方 VideoLAN LibVLC，播放标准 RTSP + RTP/JPEG over UDP 视频
+- 显示 ESP32 实际完成发送的 FPS 和 JPEG 码率
+- RTSP 启动失败后自动重试，播放器原生缓存用于平滑无线抖动
 - 自动曝光开关与 100 / 300 / 600 三档手动曝光
 - QVGA / CIF / VGA 三档分辨率
 - 流畅 / 均衡 / 清晰三档 JPEG 画质
-- 将当前视频帧保存到 `Pictures/ESP32-CAM`
+- 使用 Android PixelCopy 将当前播放器画面保存到 `Pictures/ESP32-CAM`
 
 ## 构建
 
@@ -48,5 +48,11 @@ python ..\tools\emulator_bridge.py
 3. 在 Android 系统弹窗中确认连接。
 4. 视频出现后即可调整参数或点击“拍照”。
 
-手机可能提示此 Wi-Fi 无互联网，这是正常现象。应用将 HTTP 请求明确绑定到
-ESP32-CAM 的 Wi-Fi `Network`，移动数据仍可由系统用于其他应用。
+手机可能提示此 Wi-Fi 无互联网，这是正常现象。应用进程在播放期间绑定到
+ESP32-CAM 的 Wi-Fi `Network`，保证 LibVLC 的原生 RTSP/RTP 套接字走相机网络；
+断开后立即解除绑定。
+
+## 第三方播放器
+
+应用通过 Maven Central 使用 `org.videolan.android:libvlc-all:3.6.5`。LibVLC
+由 VideoLAN 提供并采用 LGPL-2.1-or-later；项目自身代码仍采用 MIT License。

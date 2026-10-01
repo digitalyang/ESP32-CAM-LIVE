@@ -36,6 +36,8 @@ esp_err_t wifi_ap_start(void)
 
     wifi_init_config_t init_config = WIFI_INIT_CONFIG_DEFAULT();
     ESP_RETURN_ON_ERROR(esp_wifi_init(&init_config), TAG, "Wi-Fi init failed");
+    ESP_RETURN_ON_ERROR(esp_wifi_set_country_code("CN", true), TAG,
+                        "Unable to set Wi-Fi country");
 
     wifi_config_t wifi_config = {
         .ap = {

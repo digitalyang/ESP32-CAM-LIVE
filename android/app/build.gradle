@@ -10,8 +10,8 @@ android {
         applicationId "com.esp32cam.live"
         minSdk 29
         targetSdk 34
-        versionCode 2
-        versionName "1.0.1"
+        versionCode 4
+        versionName "1.1.0"
     }
 
     flavorDimensions "target"
@@ -21,6 +21,7 @@ android {
             buildConfigField "String", "CAMERA_HOST", '"192.168.4.1"'
             buildConfigField "int", "CONTROL_PORT", "80"
             buildConfigField "int", "STREAM_PORT", "81"
+            buildConfigField "int", "RTSP_PORT", "554"
             buildConfigField "boolean", "USE_WIFI_SPECIFIER", "true"
         }
         emulator {
@@ -30,6 +31,7 @@ android {
             buildConfigField "String", "CAMERA_HOST", '"10.0.2.2"'
             buildConfigField "int", "CONTROL_PORT", "18080"
             buildConfigField "int", "STREAM_PORT", "18181"
+            buildConfigField "int", "RTSP_PORT", "18554"
             buildConfigField "boolean", "USE_WIFI_SPECIFIER", "false"
         }
     }
@@ -49,4 +51,8 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+}
+
+dependencies {
+    implementation "org.videolan.android:libvlc-all:3.6.5"
 }

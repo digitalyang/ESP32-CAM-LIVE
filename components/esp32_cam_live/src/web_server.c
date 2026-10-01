@@ -1,5 +1,6 @@
 #include "web_server.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,6 +21,25 @@
 #define STREAM_BOUNDARY "frame"
 
 static const char *TAG = "web_server";
+
+static int stream_send(httpd_handle_t server, int socket_fd,
+                       const char *buffer, size_t length, int flags)
+{
+    (void)server;
+    for (int attempt = 0; attempt < APP_HTTP_SEND_ATTEMPTS; ++attempt) {
+        int sent = send(socket_fd, buffer, length, flags);
+        if (sent >= 0) {
+            return sent;
+        }
+        if (errno != EAGAIN && errno != EINTR) {
+            return HTTPD_SOCK_ERR_FAIL;
+        }
+        if (attempt + 1 < APP_HTTP_SEND_ATTEMPTS) {
+            vTaskDelay(1);
+        }
+    }
+    return HTTPD_SOCK_ERR_TIMEOUT;
+}
 
 static esp_err_t index_handler(httpd_req_t *request)
 {
@@ -154,13 +174,16 @@ static esp_err_t stream_handler(httpd_req_t *request)
 
     int no_delay = 1;
     int socket_fd = httpd_req_to_sockfd(request);
+    ESP_RETURN_ON_ERROR(httpd_sess_set_send_override(
+                            request->handle, socket_fd, stream_send),
+                        TAG, "Unable to install stream send retry");
     if (setsockopt(socket_fd, IPPROTO_TCP, TCP_NODELAY,
                    &no_delay, sizeof(no_delay)) < 0) {
         ESP_LOGW(TAG, "Unable to enable TCP_NODELAY");
     }
     const struct timeval send_timeout = {
-        .tv_sec = 0,
-        .tv_usec = APP_SEND_TIMEOUT_MS * 1000,
+        .tv_sec = APP_HTTP_SEND_TIMEOUT_MS / 1000,
+        .tv_usec = (APP_HTTP_SEND_TIMEOUT_MS % 1000) * 1000,
     };
     if (setsockopt(socket_fd, SOL_SOCKET, SO_SNDTIMEO,
                    &send_timeout, sizeof(send_timeout)) < 0) {
@@ -228,6 +251,11 @@ esp_err_t web_server_start(void)
 {
     httpd_config_t page_config = HTTPD_DEFAULT_CONFIG();
     page_config.server_port = APP_PAGE_SERVER_PORT;
+    /* Control and telemetry requests are tiny but latency-sensitive. Keep
+     * them above the continuous camera (6) and RTSP sender (7) tasks so a
+     * saturated video path cannot make the UI appear disconnected. */
+    page_config.task_priority = 8;
+    page_config.core_id = 1;
     page_config.max_uri_handlers = 4;
     page_config.max_open_sockets = 3;
     page_config.lru_purge_enable = true;
@@ -255,7 +283,7 @@ esp_err_t web_server_start(void)
     stream_config.server_port = APP_STREAM_SERVER_PORT;
     stream_config.ctrl_port = page_config.ctrl_port + 1;
     stream_config.max_uri_handlers = 1;
-    stream_config.max_open_sockets = 1;
+    stream_config.max_open_sockets = 2;
     stream_config.lru_purge_enable = true;
     stream_config.stack_size = 8192;
     stream_config.core_id = 1;

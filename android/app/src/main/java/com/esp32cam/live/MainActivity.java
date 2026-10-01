@@ -3,15 +3,13 @@ package com.esp32cam.live;
 import android.Manifest;
 import android.app.Activity;
 import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
-import android.net.Network;
 import android.net.ConnectivityManager;
+import android.net.Network;
 import android.os.Build;
 import android.os.Bundle;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.ImageView;
 import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.TextView;
@@ -19,22 +17,25 @@ import android.widget.Toast;
 
 import com.esp32cam.live.network.CameraApi;
 import com.esp32cam.live.network.Esp32NetworkManager;
+import com.esp32cam.live.player.VlcRtspPlayer;
 import com.esp32cam.live.storage.FrameSaver;
-import com.esp32cam.live.stream.MjpegStreamClient;
+
+import org.videolan.libvlc.util.VLCVideoLayout;
 
 import java.util.Locale;
-import java.util.concurrent.atomic.AtomicReference;
 
 public final class MainActivity extends Activity {
     private static final int PERMISSION_REQUEST = 100;
     private static final int[] EXPOSURE_VALUES = {100, 300, 600};
     private static final String[] RESOLUTION_VALUES = {"qvga", "cif", "vga"};
     private static final int[] QUALITY_VALUES = {30, 20, 12};
+    private static final String RTSP_URL = "rtsp://" + BuildConfig.CAMERA_HOST + ":"
+            + BuildConfig.RTSP_PORT + "/mjpeg/1";
 
-    private final AtomicReference<Bitmap> latestFrame = new AtomicReference<>();
     private Esp32NetworkManager networkManager;
+    private ConnectivityManager connectivityManager;
     private CameraApi cameraApi;
-    private MjpegStreamClient streamClient;
+    private VlcRtspPlayer videoPlayer;
     private FrameSaver frameSaver;
     private Network cameraNetwork;
 
@@ -42,7 +43,7 @@ public final class MainActivity extends Activity {
     private Button captureButton;
     private TextView statusText;
     private TextView fpsText;
-    private ImageView videoView;
+    private VLCVideoLayout videoView;
     private Switch autoExposureSwitch;
     private Spinner exposureSpinner;
     private Spinner resolutionSpinner;
@@ -55,6 +56,7 @@ public final class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
 
         networkManager = new Esp32NetworkManager(this);
+        connectivityManager = getSystemService(ConnectivityManager.class);
         frameSaver = new FrameSaver(this);
         bindViews();
         configureControls();
@@ -129,8 +131,7 @@ public final class MainActivity extends Activity {
 
     private void requestPermissionAndConnect() {
         if (!BuildConfig.USE_WIFI_SPECIFIER) {
-            ConnectivityManager manager = getSystemService(ConnectivityManager.class);
-            Network activeNetwork = manager.getActiveNetwork();
+            Network activeNetwork = connectivityManager.getActiveNetwork();
             if (activeNetwork == null) {
                 showToast("模拟器网络不可用");
                 return;
@@ -192,26 +193,33 @@ public final class MainActivity extends Activity {
     private void startCamera(Network network) {
         disconnectClients();
         cameraNetwork = network;
+        if (!connectivityManager.bindProcessToNetwork(network)) {
+            setDisconnected(R.string.status_connection_failed);
+            showToast("无法把播放器绑定到 ESP32-CAM 网络");
+            return;
+        }
+
         cameraApi = new CameraApi(network);
-        streamClient = new MjpegStreamClient(network, new MjpegStreamClient.Listener() {
+        videoPlayer = new VlcRtspPlayer(this, videoView, new VlcRtspPlayer.Listener() {
             @Override
-            public void onFrame(Bitmap bitmap, double fps, long kbps) {
-                latestFrame.set(bitmap);
-                runOnUiThread(() -> {
-                    videoView.setImageBitmap(bitmap);
-                    statusText.setText(R.string.status_streaming);
-                    fpsText.setText(String.format(Locale.US,
-                            "FPS %.1f · %d kb/s", fps, kbps));
-                    captureButton.setEnabled(true);
-                });
+            public void onPlaying() {
+                statusText.setText(R.string.status_streaming);
+                captureButton.setEnabled(true);
+            }
+
+            @Override
+            public void onMetrics(double fps, long kbps) {
+                fpsText.setText(String.format(Locale.US,
+                        "FPS %.1f · %d kb/s", fps, kbps));
             }
 
             @Override
             public void onError(String message) {
-                runOnUiThread(() -> statusText.setText("视频重连中：" + message));
+                statusText.setText(message);
+                captureButton.setEnabled(false);
             }
         });
-        streamClient.start();
+        videoPlayer.play(RTSP_URL);
         statusText.setText(R.string.status_connected);
         connectButton.setText(R.string.disconnect);
         connectButton.setEnabled(true);
@@ -224,17 +232,24 @@ public final class MainActivity extends Activity {
     }
 
     private void captureCurrentFrame() {
-        Bitmap frame = latestFrame.get();
-        if (frame == null) {
+        if (videoPlayer == null) {
             showToast("还没有可保存的视频帧");
             return;
         }
         captureButton.setEnabled(false);
-        frameSaver.save(frame, (uri, error) -> runOnUiThread(() -> {
-            captureButton.setEnabled(true);
-            showToast(error == null ? "照片已保存到 Pictures/ESP32-CAM" :
-                    "保存失败：" + error);
-        }));
+        videoPlayer.captureFrame((frame, captureError) -> {
+            if (captureError != null) {
+                captureButton.setEnabled(true);
+                showToast(captureError);
+                return;
+            }
+            frameSaver.save(frame, (uri, saveError) -> runOnUiThread(() -> {
+                captureButton.setEnabled(videoPlayer != null);
+                showToast(saveError == null ? "照片已保存到 Pictures/ESP32-CAM" :
+                        "保存失败：" + saveError);
+            }));
+            frame.recycle();
+        });
     }
 
     private void disconnectCamera() {
@@ -253,14 +268,15 @@ public final class MainActivity extends Activity {
     }
 
     private void disconnectClients() {
-        if (streamClient != null) {
-            streamClient.close();
-            streamClient = null;
+        if (videoPlayer != null) {
+            videoPlayer.close();
+            videoPlayer = null;
         }
         if (cameraApi != null) {
             cameraApi.close();
             cameraApi = null;
         }
+        connectivityManager.bindProcessToNetwork(null);
     }
 
     private void showToast(String message) {

@@ -2,10 +2,13 @@ package com.esp32cam.live.network;
 
 import android.content.Context;
 import android.net.ConnectivityManager;
+import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
 import android.net.wifi.WifiNetworkSpecifier;
+
+import java.net.Inet4Address;
 
 public final class Esp32NetworkManager {
     public interface Listener {
@@ -20,6 +23,8 @@ public final class Esp32NetworkManager {
 
     private final ConnectivityManager connectivityManager;
     private ConnectivityManager.NetworkCallback callback;
+    private Network pendingNetwork;
+    private boolean connectedDelivered;
 
     public Esp32NetworkManager(Context context) {
         connectivityManager = context.getSystemService(ConnectivityManager.class);
@@ -39,11 +44,19 @@ public final class Esp32NetworkManager {
         callback = new ConnectivityManager.NetworkCallback() {
             @Override
             public void onAvailable(Network network) {
-                listener.onConnected(network);
+                pendingNetwork = network;
+                deliverWhenReady(network, connectivityManager.getLinkProperties(network), listener);
+            }
+
+            @Override
+            public void onLinkPropertiesChanged(Network network, LinkProperties properties) {
+                deliverWhenReady(network, properties, listener);
             }
 
             @Override
             public void onLost(Network network) {
+                pendingNetwork = null;
+                connectedDelivered = false;
                 listener.onDisconnected();
             }
 
@@ -71,5 +84,21 @@ public final class Esp32NetworkManager {
             // The callback may already have been released by Android.
         }
         callback = null;
+        pendingNetwork = null;
+        connectedDelivered = false;
+    }
+
+    private synchronized void deliverWhenReady(Network network, LinkProperties properties,
+                                                Listener listener) {
+        if (connectedDelivered || pendingNetwork == null
+                || !network.equals(pendingNetwork) || properties == null) {
+            return;
+        }
+        boolean hasIpv4 = properties.getLinkAddresses().stream()
+                .anyMatch(address -> address.getAddress() instanceof Inet4Address);
+        if (hasIpv4) {
+            connectedDelivered = true;
+            listener.onConnected(network);
+        }
     }
 }

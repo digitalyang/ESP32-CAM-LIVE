@@ -11,22 +11,26 @@
 - 单张照片：`http://192.168.4.1/snapshot`
 - 页面实时显示 FPS 和 MJPEG 码率
 - RTSP 固定目标 30 FPS，RTP 使用 90 kHz 标准时间戳
-- SoftAP 使用现场扫描并经 RTP 压力测试后吞吐更好的频道 11
+- SoftAP 使用现场复扫后干扰更低的频道 13，并显式采用中国区信道规则
 - FreeRTOS 独立摄像头采集任务持续取帧
 - 长度为 1 的最新帧队列；网络来不及发送时直接丢弃旧帧
 - 标准 RFC 2435 JPEG over RTP/UDP，兼容 VLC 和 FFmpeg
 - RTP 数据包最大约 1350 字节，避免 IP 层再次分片
-- RTP 分片按每 4 包一组提交；仅大运动帧需要分组让出 1 ms，静态小帧不增加等待
+- RTP 分片按每 4 包一组提交，大运动帧分组让出 1 ms
 - FreeRTOS 使用 1 kHz 系统节拍；摄像头采集与较高优先级的 RTSP 发送运行在 CPU1，Wi-Fi 驱动运行在 CPU0
+- 控制与统计 HTTP 任务优先级高于连续采集/发送任务，视频繁忙时仍能响应应用操作
 - RTP 分片发送失败时放弃当前帧，下一帧继续
 - 每个 RTP 分片遇到本地发送队列繁忙时最多尝试 3 次，间隔约 0.1 ms
+- RTSP 控制连接启用 TCP keepalive，异常退出的播放器不会永久占住唯一视频会话
 - 画质三档：流畅 / 均衡 / 清晰
 - 分辨率三档：320×240 / 400×296 / 640×480
 - 默认关闭自动曝光并使用适合 30 FPS 的短曝光；中 / 长档可能降低实际帧率
 - 切换画质或分辨率时自动重连视频流，避免旧帧积压
 - 原生 Android 客户端，可通过系统弹窗连接 ESP32-CAM SoftAP
 - Android 客户端支持实时画面、曝光、分辨率、画质和视频帧拍照
-- Android 客户端网络接收和 JPEG 解码解耦，积压时丢弃旧帧并自动恢复中断的视频流
+- Android 客户端内嵌 VideoLAN LibVLC，直接播放 RTSP/RTP over UDP，并在失败后重试
+- Android 客户端将原生播放器套接字绑定到 ESP32-CAM Wi-Fi，避免 Android 16 错误选路
+- HTTP/MJPEG 每次发送最多等待 100 ms，缓冲繁忙时最多尝试 3 次；RTSP/RTP 同样保持 100 ms 实时发送策略
 
 ## 工程结构
 
@@ -96,10 +100,11 @@ cd android
 android/app/build/outputs/apk/device/debug/app-device-debug.apk
 ```
 
-应用播放 `http://192.168.4.1:81/stream`，控制请求发送到
-`http://192.168.4.1/control`。拍照直接保存当前视频帧到系统相册的
+应用通过 LibVLC 播放 `rtsp://192.168.4.1:554/mjpeg/1`，控制请求发送到
+`http://192.168.4.1/control`。拍照直接保存当前播放器画面到系统相册的
 `Pictures/ESP32-CAM`，因此不会额外占用 ESP32 摄像头帧缓冲。
 
 ## 开源协议
 
-本项目采用 [MIT License](LICENSE)。
+本项目自身代码采用 [MIT License](LICENSE)。Android 应用使用 VideoLAN LibVLC
+3.6.5（LGPL-2.1-or-later），详情见 [third_party/README.md](third_party/README.md)。
