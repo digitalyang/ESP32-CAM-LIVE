@@ -1,0 +1,30 @@
+# AI-Thinker ESP32-CAM modules normally use a 4 MB flash and 4 MB PSRAM.
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHFREQ_40M=y
+CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
+
+# Enable the external PSRAM used for camera frame buffers.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_BOOT_INIT=y
+CONFIG_SPIRAM_SPEED_40M=y
+CONFIG_SPIRAM_USE_MALLOC=y
+
+# Camera streaming benefits from the higher CPU clock.
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+
+# A 1 kHz RTOS tick lets the 30 FPS scheduler sleep in 1 ms increments.
+# At the 100 Hz default, every one-tick sleep lasts 10 ms and introduces
+# visible 30/40 ms frame-period jitter.
+CONFIG_FREERTOS_HZ=1000
+
+# Give the Wi-Fi driver more room for short RTP/JPEG bursts.
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=64
+CONFIG_ESP_WIFI_TX_BA_WIN=12
+
+# Two HTTP listeners plus RTSP/RTP and browser control polling require more
+# descriptors than the ESP-IDF default when old TCP sessions are closing.
+CONFIG_LWIP_MAX_SOCKETS=16
+
+# Larger TCP windows improve MJPEG streaming throughput.
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=16384
+CONFIG_LWIP_TCP_WND_DEFAULT=16384

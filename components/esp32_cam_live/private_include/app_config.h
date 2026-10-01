@@ -1,0 +1,18 @@
+#pragma once
+
+#define APP_WIFI_SSID          "ESP32-CAM"
+#define APP_WIFI_PASSWORD      "12345678"
+#define APP_WIFI_CHANNEL       11
+#define APP_WIFI_MAX_CLIENTS   4
+
+#define APP_PAGE_SERVER_PORT   80
+#define APP_STREAM_SERVER_PORT 81
+#define APP_MAX_STREAM_FPS     30
+#define APP_STREAM_INTERVAL_US (1000000LL / APP_MAX_STREAM_FPS)
+#define APP_SEND_TIMEOUT_MS     100
+#define APP_RTSP_PORT           554
+#define APP_RTP_PORT            6970
+#define APP_RTP_PACKET_SIZE     1350
+#define APP_RTP_SEND_ATTEMPTS   3
+#define APP_RTP_RETRY_DELAY_US  100
+#define APP_RTP_PACKETS_PER_YIELD 4
