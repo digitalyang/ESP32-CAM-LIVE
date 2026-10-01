@@ -4,6 +4,8 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Network;
 
+import com.esp32cam.live.BuildConfig;
+
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.EOFException;
@@ -12,6 +14,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -21,12 +25,16 @@ public final class MjpegStreamClient implements AutoCloseable {
         void onError(String message);
     }
 
-    private static final String STREAM_URL = "http://192.168.4.1:81/stream";
+    private static final String STREAM_URL = "http://" + BuildConfig.CAMERA_HOST
+            + ":" + BuildConfig.STREAM_PORT + "/stream";
     private static final int MAX_JPEG_BYTES = 1024 * 1024;
+    private static final long RECONNECT_DELAY_MS = 250;
 
     private final Network network;
     private final Listener listener;
-    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final ExecutorService networkExecutor = Executors.newSingleThreadExecutor();
+    private final ExecutorService decodeExecutor = Executors.newSingleThreadExecutor();
+    private final BlockingQueue<byte[]> latestFrameQueue = new ArrayBlockingQueue<>(1);
     private volatile boolean running;
     private volatile HttpURLConnection connection;
 
@@ -40,14 +48,40 @@ public final class MjpegStreamClient implements AutoCloseable {
             return;
         }
         running = true;
-        executor.execute(this::readLoop);
+        networkExecutor.execute(this::readLoop);
+        decodeExecutor.execute(this::decodeLoop);
     }
 
     private void readLoop() {
-        long windowStartedNs = System.nanoTime();
-        long windowBytes = 0;
-        int windowFrames = 0;
-        try {
+        while (running) {
+            try {
+                readStream();
+            } catch (IOException error) {
+                if (!running) {
+                    return;
+                }
+                listener.onError(error.getMessage() == null
+                        ? error.getClass().getSimpleName() : error.getMessage());
+            } finally {
+                HttpURLConnection activeConnection = connection;
+                connection = null;
+                if (activeConnection != null) {
+                    activeConnection.disconnect();
+                }
+            }
+
+            if (running) {
+                try {
+                    Thread.sleep(RECONNECT_DELAY_MS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }
+    }
+
+    private void readStream() throws IOException {
             connection = (HttpURLConnection) network.openConnection(new URL(STREAM_URL));
             connection.setConnectTimeout(3000);
             connection.setReadTimeout(4000);
@@ -65,36 +99,42 @@ public final class MjpegStreamClient implements AutoCloseable {
                         throw new IOException("Invalid JPEG length: " + contentLength);
                     }
                     byte[] jpeg = readExactly(input, contentLength);
-                    Bitmap bitmap = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.length);
-                    if (bitmap == null) {
-                        continue;
-                    }
-
-                    windowFrames++;
-                    windowBytes += jpeg.length;
-                    long nowNs = System.nanoTime();
-                    double elapsed = (nowNs - windowStartedNs) / 1_000_000_000.0;
-                    double fps = elapsed > 0 ? windowFrames / elapsed : 0;
-                    long kbps = elapsed > 0
-                            ? Math.round(windowBytes * 8.0 / elapsed / 1000.0) : 0;
-                    listener.onFrame(bitmap, fps, kbps);
-                    if (elapsed >= 1.0) {
-                        windowStartedNs = nowNs;
-                        windowFrames = 0;
-                        windowBytes = 0;
+                    if (!latestFrameQueue.offer(jpeg)) {
+                        latestFrameQueue.poll();
+                        latestFrameQueue.offer(jpeg);
                     }
                 }
             }
-        } catch (IOException error) {
-            if (running) {
-                listener.onError(error.getMessage() == null
-                        ? error.getClass().getSimpleName() : error.getMessage());
-            }
-        } finally {
-            running = false;
-            if (connection != null) {
-                connection.disconnect();
-                connection = null;
+    }
+
+    private void decodeLoop() {
+        long windowStartedNs = System.nanoTime();
+        long windowBytes = 0;
+        int windowFrames = 0;
+        double displayedFps = 0;
+        long displayedKbps = 0;
+        while (running) {
+            try {
+                byte[] jpeg = latestFrameQueue.take();
+                Bitmap bitmap = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.length);
+                if (bitmap == null) {
+                    continue;
+                }
+                windowFrames++;
+                windowBytes += jpeg.length;
+                long nowNs = System.nanoTime();
+                double elapsed = (nowNs - windowStartedNs) / 1_000_000_000.0;
+                if (elapsed >= 1.0) {
+                    displayedFps = windowFrames / elapsed;
+                    displayedKbps = Math.round(windowBytes * 8.0 / elapsed / 1000.0);
+                    windowStartedNs = nowNs;
+                    windowFrames = 0;
+                    windowBytes = 0;
+                }
+                listener.onFrame(bitmap, displayedFps, displayedKbps);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return;
             }
         }
     }
@@ -160,6 +200,8 @@ public final class MjpegStreamClient implements AutoCloseable {
         if (connection != null) {
             connection.disconnect();
         }
-        executor.shutdownNow();
+        latestFrameQueue.clear();
+        networkExecutor.shutdownNow();
+        decodeExecutor.shutdownNow();
     }
 }

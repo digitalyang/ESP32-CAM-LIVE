@@ -14,6 +14,30 @@ android {
         versionName "1.0.0"
     }
 
+    flavorDimensions "target"
+    productFlavors {
+        device {
+            dimension "target"
+            buildConfigField "String", "CAMERA_HOST", '"192.168.4.1"'
+            buildConfigField "int", "CONTROL_PORT", "80"
+            buildConfigField "int", "STREAM_PORT", "81"
+            buildConfigField "boolean", "USE_WIFI_SPECIFIER", "true"
+        }
+        emulator {
+            dimension "target"
+            applicationIdSuffix ".emulator"
+            versionNameSuffix "-emulator"
+            buildConfigField "String", "CAMERA_HOST", '"10.0.2.2"'
+            buildConfigField "int", "CONTROL_PORT", "18080"
+            buildConfigField "int", "STREAM_PORT", "18181"
+            buildConfigField "boolean", "USE_WIFI_SPECIFIER", "false"
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
     buildTypes {
         release {
             minifyEnabled false

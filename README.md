@@ -26,6 +26,7 @@
 - 切换画质或分辨率时自动重连视频流，避免旧帧积压
 - 原生 Android 客户端，可通过系统弹窗连接 ESP32-CAM SoftAP
 - Android 客户端支持实时画面、曝光、分辨率、画质和视频帧拍照
+- Android 客户端网络接收和 JPEG 解码解耦，积压时丢弃旧帧并自动恢复中断的视频流
 
 ## 工程结构
 
@@ -46,6 +47,7 @@ esp32-cam-live/
 │       ├── src/            摄像头、采集、网络、RTSP 和 Web 实现
 │       └── CMakeLists.txt
 ├── android/               原生 Android 客户端（Android 10 及以上）
+├── tools/                 Android 模拟器联调桥接工具
 └── third_party/
     └── README.md           第三方依赖来源和管理策略
 ```
@@ -85,13 +87,13 @@ Wi-Fi 确认窗口连接 `ESP32-CAM`，不会修改手机的全局默认网络�
 
 ```powershell
 cd android
-.\gradlew.bat assembleDebug
+.\gradlew.bat assembleDeviceDebug
 ```
 
 生成的安装包位于：
 
 ```text
-android/app/build/outputs/apk/debug/app-debug.apk
+android/app/build/outputs/apk/device/debug/app-device-debug.apk
 ```
 
 应用播放 `http://192.168.4.1:81/stream`，控制请求发送到

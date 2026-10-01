@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.net.Network;
+import android.net.ConnectivityManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.widget.AdapterView;
@@ -127,6 +128,16 @@ public final class MainActivity extends Activity {
     }
 
     private void requestPermissionAndConnect() {
+        if (!BuildConfig.USE_WIFI_SPECIFIER) {
+            ConnectivityManager manager = getSystemService(ConnectivityManager.class);
+            Network activeNetwork = manager.getActiveNetwork();
+            if (activeNetwork == null) {
+                showToast("模拟器网络不可用");
+                return;
+            }
+            startCamera(activeNetwork);
+            return;
+        }
         String permission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
                 ? Manifest.permission.NEARBY_WIFI_DEVICES
                 : Manifest.permission.ACCESS_FINE_LOCATION;
@@ -180,6 +191,7 @@ public final class MainActivity extends Activity {
                 latestFrame.set(bitmap);
                 runOnUiThread(() -> {
                     videoView.setImageBitmap(bitmap);
+                    statusText.setText(R.string.status_streaming);
                     fpsText.setText(String.format(Locale.US,
                             "FPS %.1f · %d kb/s", fps, kbps));
                     captureButton.setEnabled(true);
@@ -188,7 +200,7 @@ public final class MainActivity extends Activity {
 
             @Override
             public void onError(String message) {
-                runOnUiThread(() -> statusText.setText("视频错误：" + message));
+                runOnUiThread(() -> statusText.setText("视频重连中：" + message));
             }
         });
         streamClient.start();

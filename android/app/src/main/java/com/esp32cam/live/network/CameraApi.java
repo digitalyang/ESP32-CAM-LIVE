@@ -2,6 +2,8 @@ package com.esp32cam.live.network;
 
 import android.net.Network;
 
+import com.esp32cam.live.BuildConfig;
+
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -13,7 +15,8 @@ public final class CameraApi implements AutoCloseable {
         void onComplete(boolean success, String message);
     }
 
-    private static final String CONTROL_URL = "http://192.168.4.1/control?";
+    private static final String CONTROL_URL = "http://" + BuildConfig.CAMERA_HOST
+            + ":" + BuildConfig.CONTROL_PORT + "/control?";
     private final Network network;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
